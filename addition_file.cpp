@@ -30,7 +30,6 @@ void append_empty(ofstream &out, word header[8], int end_number_df)
         if ((header[1].to_int & 0x7FFFFF )> 49999) 
         {
             cout << end_number_df << " " << number_of_empty_fields<< " i: "<< endl;
-            // getchar();
         }
 
         for(int j = 0; j < 8; j++) 
@@ -48,20 +47,17 @@ void append_empty(ofstream &out, word header[8], int end_number_df)
 void prepend_empty(ofstream &out, word header[8])
 {
     int frame_len = (header[2].to_int & 0xffffff) * 8;
-    // header[1].to_int = header[1].to_int & 0xFF800000;
     word number_df;
     for (number_df.to_int = header[1].to_int & 0xFF800000; number_df.to_int < header[1].to_int ; number_df.to_int++)
     {
         
         char null_byte = 0;
         cout << (number_df.to_int & 0x7FFFFF) << " prepend\n";
-        // if (number_df.to_int & 0x7FFFFF == 24305) getchar();
         for(int j = 0; j < 8; j++) 
         {
             if(j != 1)out.write(header[j].bytes, 4);
             else out.write( number_df.bytes, 4);
         }
-        // header[1].to_int += 1;
         for (int j = 0; j < frame_len - 32; j++)
         {
             out.write(&null_byte,1);
@@ -81,6 +77,16 @@ bool get_header(istream *input, word header[8])
     }
     return eof;
 }
+float get_FPS(word header[8])
+{
+    int bits = ((header[3].to_int >> 26) & 0x1f) + 1;
+    int srate = header[4].to_int & 0x7fffff;
+    int channels_num = (0x1 << ((header[2].to_int  >> 24) & 0x1f));
+    int data_rate = srate * bits * channels_num;
+    int frame_len = (header[2].to_int & 0xffffff) * 8;
+    float FPS = (data_rate * 125000.) / (frame_len - 32);
+    return FPS;
+}
 int sec = 0;
 int main (int argc, char* argv[])
 {
@@ -93,6 +99,10 @@ int main (int argc, char* argv[])
         if(argc > 2) 
         {
             path_out = argv[2];
+        }
+        else
+        {
+            path_out = "appended_file.vdif";
         }
         cout<< path_in << "\t" << path_out<<endl; 
     }
@@ -113,7 +123,6 @@ int main (int argc, char* argv[])
     bool long_time_no_data = false;
     unsigned int pos = 0;
     ofstream output;
-    float FPS = 0;
     int number_of_lost_packages = 0;
     int sec = 0;
     word previous_header[8];
@@ -134,11 +143,7 @@ int main (int argc, char* argv[])
             {
                 if(sec != cur_sec)
                 {
-                    int bits = ((header[3].to_int >> 26) & 0x1f) + 1;
-                    int srate = header[4].to_int & 0x7fffff;
-                    int channels_num = (0x1 << ((header[2].to_int  >> 24) & 0x1f));
-                    int data_rate = srate * bits * channels_num;
-                    float FPS = (data_rate * 125000.) / (frame_len - 32);
+                    float FPS = get_FPS(header);
                     append_empty(output,previous_header,(int)FPS);
                     prepend_empty(output,header);
                 }
@@ -146,11 +151,7 @@ int main (int argc, char* argv[])
             }
             else if(number_df < prev_number_df)
             {
-                int bits = ((header[3].to_int >> 26) & 0x1f) + 1;
-                int srate = header[4].to_int & 0x7fffff;
-                int channels_num = (0x1 << ((header[2].to_int  >> 24) & 0x1f));
-                int data_rate = srate * bits * channels_num;
-                float FPS = (data_rate * 125000.) / (frame_len - 32);
+                float FPS = get_FPS(header);
                 append_empty(output,previous_header,(int)FPS);
                 if(number_df != 0)prepend_empty(output, header);
             }
@@ -176,12 +177,7 @@ int main (int argc, char* argv[])
         }
     }
     input.close();
-    int frame_len = (previous_header[2].to_int & 0xffffff) * 8;
-    int bits = ((previous_header[3].to_int >> 26) & 0x1f) + 1;
-    int srate = previous_header[4].to_int & 0x7fffff;
-    int channels_num = (0x1 << ((previous_header[2].to_int  >> 24) & 0x1f));
-    int data_rate = srate * bits * channels_num;
-    FPS = (data_rate * 125000.) / (frame_len - 32);
+    float FPS = get_FPS(previous_header);
     if((previous_header[1].to_int & 0x7FFFFF )< (int)FPS - 1)
     {
         append_empty(output,previous_header,(int)FPS);

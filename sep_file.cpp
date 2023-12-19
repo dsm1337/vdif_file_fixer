@@ -99,7 +99,6 @@ int main (int argc, char* argv[])
             else if ((prev_number_df > number_df) && (prev_number_df < FPS - 1))
             {
                 number_of_lost_packages += FPS + number_df - prev_number_df - 1;
-                // getchar();
             }
             if((cur_sec - sec > 20))
             {
@@ -109,8 +108,6 @@ int main (int argc, char* argv[])
                 }
                 else
                 {
-                    // cout << "big diff: " << cur_sec - sec;
-                    // getchar();
                     long_time_no_data = true;
                     buf.end = input.tellg() - 32;
                     pos.push_back(buf);

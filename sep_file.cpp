@@ -30,7 +30,16 @@ bool get_header(istream *input, word vdif_header[8])
     }
     return eof;
 }
-
+float get_FPS(word header[8])
+{
+    int bits = ((header[3].to_int >> 26) & 0x1f) + 1;
+    int srate = header[4].to_int & 0x7fffff;
+    int channels_num = (0x1 << ((header[2].to_int  >> 24) & 0x1f));
+    int data_rate = srate * bits * channels_num;
+    int frame_len = (header[2].to_int & 0xffffff) * 8;
+    float FPS = (data_rate * 125000.) / (frame_len - 32);
+    return FPS;
+}
 int main (int argc, char* argv[])
 {
     cout << "Start" << endl;
@@ -57,18 +66,20 @@ int main (int argc, char* argv[])
         path_out = "/home/yakubov/coding/";
     }
     input.open(path_in, ios::binary | ios::in);
+    if (input.fail())
+    {
+        cerr << "Could not open file: " << path_in << endl;
+    }
     int sec = 0;
     int prev_number_df = 0;
     bool eof = false;
     bool long_time_no_data = false;
-    vector<loss_position> pos;
+    vector<int> pos;
     float FPS = 0;
     int number_of_lost_packages = 0;
     while(!eof)
     {
-        loss_position buf;
         word vdif_header[8];
-        // getchar();
         eof = get_header(&input, vdif_header);
         if(!eof)
         {
@@ -80,11 +91,7 @@ int main (int argc, char* argv[])
             cout << "Frame length:" << frame_len << "\t";
             if(cur_sec != sec)
             {
-                int bits = ((vdif_header[3].to_int >> 26) & 0x1f) + 1;
-                int srate = vdif_header[4].to_int & 0x7fffff;
-                int channels_num = (0x1 << ((vdif_header[2].to_int  >> 24) & 0x1f));
-                int data_rate = srate * bits * channels_num;
-                FPS = (data_rate * 125000.) / (frame_len - 32);
+                FPS = get_FPS(vdif_header);
             }
             cout << "FPS:" << FPS << endl << flush;
             if(vdif_header[0].to_int >> 31 == 1)
@@ -94,7 +101,6 @@ int main (int argc, char* argv[])
             if(number_df - prev_number_df > 1)
             {
                 number_of_lost_packages += number_df - prev_number_df;
-                // getchar();
             }
             else if ((prev_number_df > number_df) && (prev_number_df < FPS - 1))
             {
@@ -109,12 +115,10 @@ int main (int argc, char* argv[])
                 else
                 {
                     long_time_no_data = true;
-                    buf.end = input.tellg() - 32;
-                    pos.push_back(buf);
+                    pos.push_back(input.tellg() - 32);
                 }
             }
             sec = cur_sec;
-            buf.begin = input.tellg() - 32;
             input.seekg(frame_len - 32,ios::cur);
             prev_number_df = number_df;
         }
@@ -123,33 +127,43 @@ int main (int argc, char* argv[])
     if(long_time_no_data)
     {
         cout << "data bad" << endl;
-        for (int i=0; i<pos.size(); i++) cout<< pos[i].end << endl;
+        for (int i=0; i<pos.size(); i++) cout<< pos[i] << endl;
         fstream vdif_file;
         ofstream output, output2;
         word data;
         vdif_file.open(path_in, ios::binary | ios::in);
+        if (vdif_file.fail())
+        {
+            cerr << "Could not open file: " << path_in << endl;
+        }
         for (int i = 0; i < pos.size();i++) 
         {
             word header[8];
             output.open(path_out + to_string(i) + ".vdif", ios::binary | ios::out);
-            cout <<  i  <<":"<< endl;
-            int frame_len = (header[2].to_int & 0xffffff) * 8;
-            
-            while (vdif_file.tellg() < pos[i].end)
+            if (output.fail())
+            {
+                cerr << "Could not open file: " << path_out << i << endl;
+            }
+            cout <<  i  <<": ";
+            while (vdif_file.tellg() < pos[i])
             {
                 vdif_file.read(data.bytes,4);
                 output.write(data.bytes,4);
             }
             output.close();
+            cout << " completed" << endl;
         }
         output.open(path_out + to_string(pos.size()) +".vdif", ios::binary | ios::out);
+        if (output.fail())
+        {
+            cerr << "Could not open file: " << path_out << pos.size() << endl;
+        }
         cout <<  pos.size()<< ":" << endl;
         while (vdif_file.read(data.bytes,4))
         {
             output.write(data.bytes,4);
         }
         output.close();
-        vdif_file.seekg(pos[0].begin,ios::beg);
         word header[8];
         vdif_file.close(); 
     }

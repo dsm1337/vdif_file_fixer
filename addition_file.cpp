@@ -87,7 +87,6 @@ float get_FPS(word header[8])
     float FPS = (data_rate * 125000.) / (frame_len - 32);
     return FPS;
 }
-int sec = 0;
 int main (int argc, char* argv[])
 {
     cout << "Start" << endl;
@@ -178,7 +177,7 @@ int main (int argc, char* argv[])
     }
     input.close();
     float FPS = get_FPS(previous_header);
-    if((previous_header[1].to_int & 0x7FFFFF )< (int)FPS - 1)
+    if((previous_header[1].to_int & 0x7FFFFF ) < (int)FPS - 1)
     {
         append_empty(output,previous_header,(int)FPS);
     }
